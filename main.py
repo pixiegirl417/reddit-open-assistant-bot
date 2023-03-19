@@ -112,7 +112,6 @@ def comments_loop():
             handle_summons(comment)
 
 def _main():
-    try:
          # Start the two stream loops in separate processes
         submissions_process = multiprocessing.Process(target=submissions_loop)
         comments_process = multiprocessing.Process(target=comments_loop)
@@ -120,7 +119,12 @@ def _main():
         comments_process.start()
         submissions_process.join()
         comments_process.join()
-    except Exception as e: print(e)
 
 if __name__ == '__main__':
-    _main()
+    while True:
+        try: 
+            _main()
+        except Exception as e:
+             print(e)
+             continue
+        break
