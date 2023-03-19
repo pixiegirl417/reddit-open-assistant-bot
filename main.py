@@ -7,7 +7,7 @@ from util import *
 import os
 from dotenv import load_dotenv
 
-skip_existing = False
+skip_existing = True
 
 # Set up the Reddit API credentials
 load_dotenv()
