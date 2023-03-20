@@ -113,14 +113,19 @@ def submissions_loop():
 # Define a function to run the subreddit.stream.comments() loop
 def comments_loop():
     for comment in subreddit.stream.comments(skip_existing=skip_existing):
-        comment.refresh()
-        print(f'Detected a comment: {comment.body}')
-        parent_comment = comment.parent()
-        if parent_comment.author == username:
-            handle__direct_reply(comment)
+        try:
+            comment.refresh()
+            print(f'Detected a comment: {comment.body}')
+            parent_comment = comment.parent()
+            if parent_comment.author == username:
+                handle__direct_reply(comment)
 
-        elif comment.body.lower().startswith('!openassistant'):
-            handle_summons(comment)
+            elif comment.body.lower().startswith('!openassistant'):
+                handle_summons(comment)
+        except Exception as e:
+             print (e)
+             continue
+
 
 def _main():
          # Start the two stream loops in separate processes
