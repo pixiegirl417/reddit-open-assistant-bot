@@ -6,8 +6,9 @@ import time
 from util import *
 import os
 from dotenv import load_dotenv
+from praw.exceptions import DuplicateReplaceException
 
-skip_existing = True
+skip_existing = False
 
 # Set up the Reddit API credentials
 load_dotenv()
@@ -36,7 +37,7 @@ def build_final_reply(text):
 
     # Always prompt with no preceding text for now, we are disabling bot memory because limitation is 1000 tokens.
     response = bot.prompt(text, preceding_text='', return_full_text=False) 
-    print('Created response: ' + response)
+    print(F'Created response: {response}\n\n')
     return append_reply_disclaimer(response)
 
 
@@ -46,23 +47,23 @@ def handle__direct_reply(comment):
 
         # Get all replies to the comment and see if I replied already.
         if has_already_replied(comment): 
-             print(f'Detected old direct reply: {comment.body}')
+             print(f'Detected old direct reply: {comment.body}\n\n')
              return
         
-        print(f'Detected new direct reply: {comment.body}')
+        print(f'Detected new direct reply: {comment.body}\n\n')
         comment.reply(build_final_reply(comment.body))
         
 
 def handle_summons(comment):
     if (comment.author == username):
-        print('Summons was self, ignoring.')
+        print('Summons was self, ignoring.\n\n')
         return
     
     if has_already_replied(comment): 
-        print(f'Detected old summons: {comment.body}')
+        print(f'Detected old summons: {comment.body}\n\n')
         return
     
-    print(f'Detected new summons: {comment.body}')
+    print(f'Detected new summons: {comment.body}\n\n')
     comment.reply(build_final_reply(comment.body))
 
 # Check if bot has already replied to any given comment (not post).
@@ -72,11 +73,18 @@ def has_already_replied(comment):
               comment.refresh()
               comment.replies.replace_more(limit=None)
               break
-         except Exception:
-              time.sleep(1)
+         except DuplicateReplaceException: 
+              # This is bug due to unknown reasons.
+              # https://www.reddit.com/r/redditdev/comments/119qx01/issues_with_fetching_comment_chains_around_21st/
+              break
+         except Exception as e:
+              print('\n\n')
+              print(e)
+              print('Expanding "more comments"...\n\n')
+              time.sleep(0.5)
 
     for reply in comment.replies:
-         print(f'Found reply with author: {reply.author} and body: {reply.body}')
+         print(f'Found reply with author: {reply.author} and body: {reply.body}\n\n')
          if reply.author == username: return True
 
     return False
@@ -90,10 +98,10 @@ def handle_post(post):
     post.comments.replace_more(limit=None)
     for comment in post.comments:
          if (comment.author == username): 
-              print(f'Detected old post: {post.title}')
+              print(f'Detected old post: {post.title}\n\n')
               return
          
-    print(f'New post detected: {post.title}')
+    print(f'New post detected: {post.title}\n\n')
     text = post.selftext
     post.reply(build_final_reply(text))
 
@@ -105,6 +113,8 @@ def submissions_loop():
 # Define a function to run the subreddit.stream.comments() loop
 def comments_loop():
     for comment in subreddit.stream.comments(skip_existing=skip_existing):
+        comment.refresh()
+        print(f'Detected a comment: {comment.body}')
         parent_comment = comment.parent()
         if parent_comment.author == username:
             handle__direct_reply(comment)
@@ -122,10 +132,11 @@ def _main():
         comments_process.join()
 
 if __name__ == '__main__':
-    while True:
+    running = False
+    while not running:
         try: 
             _main()
+            running = True
         except Exception as e:
              print(e)
-             continue
-        break
+             running = False

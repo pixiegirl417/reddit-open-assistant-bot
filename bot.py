@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 
 HF_TOKEN = os.getenv('HF_TOKEN')
-oa = InferenceAPIClient("OpenAssistant/oasst-sft-1-pythia-12b", token=HF_TOKEN, timeout=30)
+oa = InferenceAPIClient("OpenAssistant/oasst-sft-1-pythia-12b", token=HF_TOKEN, timeout=90)
 
 def prompt(promptText, preceding_text = '', return_full_text=True):
     promptText = "<|prompter|>{}<|endoftext|><|assistant|>".format(promptText)
