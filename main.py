@@ -108,7 +108,11 @@ def handle_post(post):
 # Define a function to run the subreddit.stream.submissions() loop
 def submissions_loop():
     for submission in subreddit.stream.submissions(skip_existing=skip_existing):
-        handle_post(submission)
+        try:
+            handle_post(submission)
+        except Exception as e:
+             print(e)
+             continue
 
 # Define a function to run the subreddit.stream.comments() loop
 def comments_loop():
