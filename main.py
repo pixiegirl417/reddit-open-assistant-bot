@@ -8,7 +8,7 @@ import os
 from dotenv import load_dotenv
 from praw.exceptions import DuplicateReplaceException
 
-skip_existing = False
+skip_existing = True
 
 # Set up the Reddit API credentials
 load_dotenv()
@@ -25,72 +25,79 @@ reddit = praw.Reddit(
     password=password,
 )
 
-# Set up the subreddit to monitor
-subreddit = reddit.subreddit('ask_open_assistant')
-
-def build_final_reply(text):
-    if (len(text) > 1000):
-            return append_reply_disclaimer("I would like to reply to your comment, but it is greater than 1000 characters and I cannot handle that at the moment. Sorry!")
+def build_final_reply(text, precedingText=''):
+    if (len(text.split(' ')) > 500): # 500 words is about 563 tokens
+            return append_reply_disclaimer("I would like to reply to your comment, but it is greater than 750 tokens (approx 500 words) and I cannot handle that at the moment. Sorry!")
     
     # Gets rid of the summons !openassistant regardless of where the comment came from.
     text = replace_substring_ignore_case(text, '!openassistant', '')
 
-    # Always prompt with no preceding text for now, we are disabling bot memory because limitation is 1000 tokens.
-    response = bot.prompt(text, preceding_text='', return_full_text=False) 
+    response = bot.prompt(text, preceding_text=precedingText, return_full_text=False) 
     print(F'Created response: {response}\n\n')
     return append_reply_disclaimer(response)
 
 
+def build_preceding_conversation_array(comment, conversation=None):
+    if conversation is None:
+         conversation = []
+
+    parent = comment.parent()
+
+    if not parent.is_root:
+        # Recursively appends comments til we hit the root comment. 
+        conversation.append(strip_disclaimer(parent.body))
+        build_preceding_conversation_array(parent, conversation)
+    else:
+         # If it's a root level comment by the bot, then the top level post is the user's initial prompt.
+         if (parent.author == username):
+              # First get this root level comment body in the list
+              conversation.insert(0, strip_disclaimer(parent.body))
+              
+              # Then get the top level post body in the list
+              conversation.insert(0, parent.parent().selftext)
+         else:
+              # In this case, the root level comment is by the user so it is the initial prompt.
+              conversation.insert(0, replace_substring_ignore_case(parent.body, '!openassistant', ''))
+
+    return conversation
+
 # Define a function to handle replies to the bot's comments
 def handle__direct_reply(comment):       
-        # TODO: retrieve previous comments, build conversation and feed it as preceding text to enable bot memory
-
         # Get all replies to the comment and see if I replied already.
+        if comment.body.startswith('!ignore'): return
         if has_already_replied(comment): 
-             print(f'Detected old direct reply: {comment.body}\n\n')
              return
         
-        print(f'Detected new direct reply: {comment.body}\n\n')
-        comment.reply(build_final_reply(comment.body))
+        shortened = ' '.join(comment.body.split(' ')[-10:])
+        print(f'Detected new direct reply: {shortened}\n\n')
+
+        conversation = build_preceding_conversation_array(comment)
+        precedingText = bot.construct_preceding_text_from_array(conversation)
+        comment.reply(build_final_reply(comment.body, precedingText=precedingText))
         
 
 def handle_summons(comment):
     if (comment.author == username):
-        print('Summons was self, ignoring.\n\n')
         return
     
     if has_already_replied(comment): 
-        print(f'Detected old summons: {comment.body}\n\n')
         return
     
-    print(f'Detected new summons: {comment.body}\n\n')
+    shortened = ' '.join(comment.body.split(' ')[-10:])
+    print(f'Detected new summons: {shortened}\n\n')
     comment.reply(build_final_reply(comment.body))
 
 # Check if bot has already replied to any given comment (not post).
 def has_already_replied(comment):
-    while True:
-         try:
-              comment.refresh()
-              comment.replies.replace_more(limit=None)
-              break
-         except DuplicateReplaceException: 
-              # This is bug due to unknown reasons.
-              # https://www.reddit.com/r/redditdev/comments/119qx01/issues_with_fetching_comment_chains_around_21st/
-              break
-         except Exception as e:
-              print('\n\n')
-              print(e)
-              print('Expanding "more comments"...\n\n')
-              time.sleep(0.5)
-
+    # Ignores the "see more" comment to save requests.
     for reply in comment.replies:
-         print(f'Found reply with author: {reply.author} and body: {reply.body}\n\n')
          if reply.author == username: return True
 
     return False
 
 # Define a function to handle new top-level posts
 def handle_post(post):    
+    if (post.selftext.startswith('!ignore')): return
     if (post.author == username): return
     if (post.selftext == ''): return
     
@@ -105,21 +112,23 @@ def handle_post(post):
     text = post.selftext
     post.reply(build_final_reply(text))
 
+
+# Set up the subreddits to monitor
+r_ask_open_assistant = reddit.subreddit('ask_open_assistant')
+r_all = reddit.subreddit('all')
+
 # Define a function to run the subreddit.stream.submissions() loop
 def submissions_loop():
-    for submission in subreddit.stream.submissions(skip_existing=skip_existing):
+    for submission in r_ask_open_assistant.stream.submissions(skip_existing=skip_existing):
         try:
             handle_post(submission)
         except Exception as e:
              print(e)
              continue
 
-# Define a function to run the subreddit.stream.comments() loop
 def comments_loop():
-    for comment in subreddit.stream.comments(skip_existing=skip_existing):
+    for comment in r_ask_open_assistant.stream.comments(skip_existing=skip_existing):
         try:
-            comment.refresh()
-            print(f'Detected a comment: {comment.body}')
             parent_comment = comment.parent()
             if parent_comment.author == username:
                 handle__direct_reply(comment)
