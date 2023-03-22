@@ -9,9 +9,9 @@ def prompt(promptText, preceding_text = '', return_full_text=True):
     promptText = "<|prompter|>{}<|endoftext|><|assistant|>".format(promptText)
     final_text = preceding_text + promptText
 
-    # Left-truncate text to fit in 500 words.
+    # Left-truncate text to fit in 500 words. 
     final_text = ' '.join(final_text.split(' ')[-500:])
-    text = oa.generate(final_text, max_new_tokens=500, return_full_text=return_full_text).generated_text
+    text = oa.generate(final_text, max_new_tokens=750, return_full_text=return_full_text).generated_text
     return text
 
 # Takes list of string comments in order that represents conversation between user and bot (beginning with user).

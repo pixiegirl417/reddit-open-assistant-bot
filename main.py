@@ -114,12 +114,12 @@ def handle_post(post):
 
 
 # Set up the subreddits to monitor
-r_ask_open_assistant = reddit.subreddit('ask_open_assistant')
-r_all = reddit.subreddit('all')
+oa_subreddits = reddit.subreddit('ask_open_assistant+OpenAssistant')
+r_ask_open_assisant = reddit.subreddit('ask_open_assistant')
 
-# Define a function to run the subreddit.stream.submissions() loop
+# For submissions, only monitor r/ask_open_assistant.
 def submissions_loop():
-    for submission in r_ask_open_assistant.stream.submissions(skip_existing=skip_existing):
+    for submission in r_ask_open_assisant.stream.submissions(skip_existing=skip_existing):
         try:
             handle_post(submission)
         except Exception as e:
@@ -127,7 +127,7 @@ def submissions_loop():
              continue
 
 def comments_loop():
-    for comment in r_ask_open_assistant.stream.comments(skip_existing=skip_existing):
+    for comment in oa_subreddits.stream.comments(skip_existing=skip_existing):
         try:
             parent_comment = comment.parent()
             if parent_comment.author == username:
